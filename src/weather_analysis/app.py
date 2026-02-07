@@ -7,51 +7,100 @@ from weather_analysis import config
 from weather_analysis.weather_api import WeatherAPI
 from weather_analysis.visualization import WeatherCharts
 from weather_analysis.ai_analyzer import WeatherAIAnalyzer
+from weather_analysis.i18n import t, get_lang, weekday_name, SUPPORTED_LANGS
+from weather_analysis.alerts import (
+    evaluate_alerts, evaluate_onecall_alerts,
+    AlertSeverity,
+)
 
 # 頁面設定
 st.set_page_config(
-    page_title="智慧天氣分析系統",
+    page_title="Smart Weather Analysis",
     page_icon="🌤️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 自訂CSS樣式
-st.markdown("""
+
+# ── CSS 注入（深色模式 + RWD + 骨架屏） ──
+
+def _inject_theme_css():
+    """注入主題 CSS（含深色模式變數、RWD 規則、骨架屏動畫）"""
+    st.markdown("""
     <style>
+    /* ── CSS Custom Properties (Light) ── */
+    :root {
+        --header-color: #1E88E5;
+        --card-gradient: linear-gradient(135deg, #667eea, #764ba2);
+        --card-text: #ffffff;
+        --card-highlight: #FFD93D;
+        --ai-gradient: linear-gradient(135deg, #f093fb, #f5576c);
+        --metric-shadow: rgba(0,0,0,0.1);
+        --footer-color: #666;
+        --skeleton-base: #e0e0e0;
+        --skeleton-shine: #f0f0f0;
+    }
+
+    /* ── Dark mode overrides ── */
+    [data-theme="dark"], .stApp[data-theme="dark"],
+    html[data-theme="dark"], body[data-theme="dark"],
+    .stApp.st-emotion-cache-dark {
+        --header-color: #64B5F6;
+        --card-gradient: linear-gradient(135deg, #4a5a8a, #5a3a7a);
+        --ai-gradient: linear-gradient(135deg, #a050a8, #c04060);
+        --metric-shadow: rgba(0,0,0,0.3);
+        --footer-color: #999;
+        --skeleton-base: #2a2a3a;
+        --skeleton-shine: #3a3a4a;
+    }
+
+    /* Streamlit dark theme detection via prefers-color-scheme */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --header-color: #64B5F6;
+            --card-gradient: linear-gradient(135deg, #4a5a8a, #5a3a7a);
+            --ai-gradient: linear-gradient(135deg, #a050a8, #c04060);
+            --metric-shadow: rgba(0,0,0,0.3);
+            --footer-color: #999;
+            --skeleton-base: #2a2a3a;
+            --skeleton-shine: #3a3a4a;
+        }
+    }
+
+    /* ── Base styles ── */
     .main-header {
         font-size: 2.5rem;
         font-weight: bold;
-        color: #1E88E5;
+        color: var(--header-color);
         text-align: center;
         margin-bottom: 2rem;
     }
     .weather-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--card-gradient);
         padding: 1.5rem;
         border-radius: 10px;
         margin: 1rem 0;
-        color: white;
+        color: var(--card-text);
     }
     .weather-card h3 {
-        color: white;
+        color: var(--card-text);
         font-weight: bold;
     }
     .weather-card strong {
-        color: #FFD93D;
+        color: var(--card-highlight);
     }
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: var(--card-gradient);
+        color: var(--card-text);
         padding: 1rem;
         border-radius: 8px;
         text-align: center;
     }
     [data-testid="stMetric"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--card-gradient);
         padding: 1rem;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px var(--metric-shadow);
     }
     [data-testid="stMetric"] label,
     [data-testid="stMetric"] [data-testid="stMetricLabel"] {
@@ -62,22 +111,70 @@ st.markdown("""
         font-weight: bold;
     }
     [data-testid="stMetric"] [data-testid="stMetricDelta"] {
-        color: #FFD93D !important;
+        color: var(--card-highlight) !important;
     }
     .ai-card {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        background: var(--ai-gradient);
         padding: 1.5rem;
         border-radius: 10px;
         margin: 1rem 0;
-        color: white;
+        color: var(--card-text);
     }
     .ai-card h3 {
-        color: white;
+        color: var(--card-text);
         font-weight: bold;
         margin-bottom: 1rem;
     }
+
+    /* ── Skeleton loading animation ── */
+    @keyframes skeleton-shimmer {
+        0%   { background-position: -200px 0; }
+        100% { background-position: calc(200px + 100%) 0; }
+    }
+    .skeleton {
+        background: linear-gradient(90deg,
+            var(--skeleton-base) 0%,
+            var(--skeleton-shine) 50%,
+            var(--skeleton-base) 100%);
+        background-size: 200px 100%;
+        animation: skeleton-shimmer 1.5s ease-in-out infinite;
+        border-radius: 8px;
+    }
+    .skeleton-metric {
+        height: 100px;
+        margin-bottom: 0.5rem;
+    }
+    .skeleton-card {
+        height: 180px;
+        margin: 1rem 0;
+    }
+    .skeleton-chart {
+        height: 400px;
+        margin: 1rem 0;
+    }
+
+    /* ── RWD: Desktop / Mobile ── */
+    @media (min-width: 769px) {
+        .desktop-only { display: block; }
+        .mobile-only  { display: none !important; }
+    }
+    @media (max-width: 768px) {
+        .desktop-only { display: none !important; }
+        .mobile-only  { display: block !important; }
+        .main-header  { font-size: 1.8rem; }
+
+        /* Streamlit columns 自動換行 */
+        [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            flex: 1 1 100% !important; min-width: 100% !important;
+        }
+        /* metric 卡片 2×2 排列 */
+        .metric-row [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            flex: 1 1 48% !important; min-width: 48% !important;
+        }
+    }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 
 # ── 工具函式 ──
@@ -93,81 +190,109 @@ def _get_active_api_key(session_key, env_default):
 
 def initialize_session_state():
     """初始化session state"""
-    if 'current_weather' not in st.session_state:
-        st.session_state.current_weather = None
-    if 'forecast_data' not in st.session_state:
-        st.session_state.forecast_data = None
-    if 'daily_summary' not in st.session_state:
-        st.session_state.daily_summary = None
-    if 'ai_analysis' not in st.session_state:
-        st.session_state.ai_analysis = None
-    if 'last_city' not in st.session_state:
-        st.session_state.last_city = None
-    if 'owm_validated' not in st.session_state:
-        st.session_state.owm_validated = None  # None / True / False
-    if 'owm_validated_key' not in st.session_state:
-        st.session_state.owm_validated_key = ""
-    if 'oai_validated' not in st.session_state:
-        st.session_state.oai_validated = None
-    if 'oai_validated_key' not in st.session_state:
-        st.session_state.oai_validated_key = ""
+    defaults = {
+        "current_weather": None,
+        "forecast_data": None,
+        "daily_summary": None,
+        "ai_analysis": None,
+        "last_city": None,
+        "owm_validated": None,
+        "owm_validated_key": "",
+        "oai_validated": None,
+        "oai_validated_key": "",
+        "ui_lang": "zh_tw",
+        "weather_alerts": [],
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
 
 
 def display_header():
     """顯示頁面標題"""
-    st.markdown('<h1 class="main-header">🌤️ 智慧天氣分析系統</h1>', unsafe_allow_html=True)
+    st.markdown(f'<h1 class="main-header">🌤️ {t("app.header")}</h1>', unsafe_allow_html=True)
     st.markdown("---")
+
+
+# ── 骨架屏 ──
+
+def display_skeleton_loading():
+    """顯示骨架屏（載入中佔位）"""
+    # 4 個 metric 卡片骨架
+    cols = st.columns(4)
+    for col in cols:
+        with col:
+            st.markdown('<div class="skeleton skeleton-metric"></div>', unsafe_allow_html=True)
+    # 天氣卡片骨架
+    st.markdown('<div class="skeleton skeleton-card"></div>', unsafe_allow_html=True)
 
 
 # ── 側邊欄 ──
 
 def display_sidebar():
     """顯示側邊欄"""
-    st.sidebar.title("⚙️ 系統設定")
+    # ── 語言切換（最頂部） ──
+    lang_options = list(SUPPORTED_LANGS.keys())
+    lang_labels = list(SUPPORTED_LANGS.values())
+    current_idx = lang_options.index(st.session_state.ui_lang) if st.session_state.ui_lang in lang_options else 0
+    selected_label = st.sidebar.selectbox(
+        t("sidebar.lang_label"),
+        options=lang_labels,
+        index=current_idx,
+    )
+    selected_lang = lang_options[lang_labels.index(selected_label)]
+    if selected_lang != st.session_state.ui_lang:
+        st.session_state.ui_lang = selected_lang
+        # 清除快取以重新取得對應語言的天氣描述
+        st.cache_data.clear()
+        st.session_state.current_weather = None
+        st.session_state.forecast_data = None
+        st.session_state.daily_summary = None
+        st.session_state.ai_analysis = None
+        st.rerun()
+
+    st.sidebar.title(f"⚙️ {t('sidebar.title')}")
 
     # ── API Key 設定 ──
-    st.sidebar.subheader("🔑 API Key 設定")
+    st.sidebar.subheader(f"🔑 {t('sidebar.api_key_section')}")
 
     # --- OpenWeatherMap API Key ---
     owm_env = config.OPENWEATHER_API_KEY
     st.sidebar.text_input(
-        "OpenWeatherMap API Key",
+        t("sidebar.owm_label"),
         value="",
         type="password",
         key="sidebar_owm_key",
-        placeholder="輸入 API Key（或由環境變數自動載入）",
+        placeholder=t("sidebar.owm_placeholder"),
     )
 
-    # 即時驗證 — 使用者有輸入時才驗證
     active_owm = _get_active_api_key("sidebar_owm_key", owm_env)
     sidebar_owm_input = st.session_state.get("sidebar_owm_key", "")
 
     if sidebar_owm_input:
-        # 使用者手動輸入了 key，驗證它
         if sidebar_owm_input != st.session_state.owm_validated_key:
             ok, msg = WeatherAPI.validate_key(sidebar_owm_input)
             st.session_state.owm_validated = ok
             st.session_state.owm_validated_key = sidebar_owm_input
         if st.session_state.owm_validated:
-            st.sidebar.caption("✅ API Key 驗證成功")
+            st.sidebar.caption(f"✅ {t('sidebar.owm_valid')}")
         else:
-            st.sidebar.caption("❌ API Key 驗證失敗，請確認金鑰是否正確")
+            st.sidebar.caption(f"❌ {t('sidebar.owm_invalid')}")
     elif owm_env:
-        st.sidebar.caption("✅ 已從環境變數載入（如需覆蓋請在上方輸入）")
+        st.sidebar.caption(f"✅ {t('sidebar.owm_env_loaded')}")
     else:
-        st.sidebar.caption("⚠️ 未偵測到環境變數，請在上方輸入 API Key")
+        st.sidebar.caption(f"⚠️ {t('sidebar.owm_not_set')}")
 
     # --- OpenAI API Key（可選） ---
     oai_env = config.OPENAI_API_KEY
     st.sidebar.text_input(
-        "OpenAI API Key（可選）",
+        t("sidebar.oai_label"),
         value="",
         type="password",
         key="sidebar_oai_key",
-        placeholder="輸入 API Key 啟用 GPT 深度分析",
+        placeholder=t("sidebar.oai_placeholder"),
     )
 
-    # 即時驗證 — OpenAI（用 models.list 輕量驗證）
     sidebar_oai_input = st.session_state.get("sidebar_oai_key", "")
 
     if sidebar_oai_input:
@@ -176,48 +301,86 @@ def display_sidebar():
             st.session_state.oai_validated = oai_ok
             st.session_state.oai_validated_key = sidebar_oai_input
         if st.session_state.oai_validated:
-            st.sidebar.caption("✅ OpenAI Key 驗證成功 (GPT 模式)")
+            st.sidebar.caption(f"✅ {t('sidebar.oai_valid')}")
         else:
-            st.sidebar.caption("❌ OpenAI Key 驗證失敗，將使用基礎規則分析")
+            st.sidebar.caption(f"❌ {t('sidebar.oai_invalid')}")
     elif oai_env:
-        st.sidebar.caption("✅ 已從環境變數載入 (GPT 模式)")
+        st.sidebar.caption(f"✅ {t('sidebar.oai_env_loaded')}")
     else:
-        st.sidebar.caption("ℹ️ 未設定（將使用基礎規則分析）")
+        st.sidebar.caption(f"ℹ️ {t('sidebar.oai_not_set')}")
+
+    # --- One Call API Key（可選） ---
+    onecall_env = config.ONECALL_API_KEY
+    st.sidebar.text_input(
+        t("sidebar.onecall_label"),
+        value="",
+        type="password",
+        key="sidebar_onecall_key",
+        placeholder=t("sidebar.onecall_placeholder"),
+    )
+
+    sidebar_onecall_input = st.session_state.get("sidebar_onecall_key", "")
+    if not sidebar_onecall_input and onecall_env:
+        st.sidebar.caption(f"✅ {t('sidebar.onecall_env_loaded')}")
+    elif not sidebar_onecall_input:
+        st.sidebar.caption(f"ℹ️ {t('sidebar.onecall_not_set')}")
 
     st.sidebar.markdown("---")
 
     # ── 城市選擇 ──
-    city_tw = st.sidebar.selectbox(
-        "選擇城市",
-        options=list(config.TAIWAN_CITIES.keys()),
-        index=list(config.TAIWAN_CITIES.keys()).index(config.DEFAULT_CITY)
-    )
-    city_en = config.TAIWAN_CITIES[city_tw]
+    lang = get_lang()
+    if lang == "zh_tw":
+        city_display_list = list(config.TAIWAN_CITIES.keys())
+        default_display = config.DEFAULT_CITY
+    else:
+        city_display_list = [config.TAIWAN_CITIES_I18N[en]["en"] for en in config.TAIWAN_CITIES.values()]
+        default_display = "Taipei"
 
-    # 更新按鈕（手動強制刷新用）
-    if st.sidebar.button("🔄 更新天氣資料", type="primary", use_container_width=True):
+    default_idx = city_display_list.index(default_display) if default_display in city_display_list else 0
+
+    city_display = st.sidebar.selectbox(
+        t("sidebar.city_label"),
+        options=city_display_list,
+        index=default_idx,
+    )
+
+    # 轉換回英文城市名稱
+    if lang == "zh_tw":
+        city_en = config.TAIWAN_CITIES[city_display]
+        city_tw = city_display
+    else:
+        # 從 en display name 找回英文 key
+        city_en = city_display
+        for en_key, names in config.TAIWAN_CITIES_I18N.items():
+            if names["en"] == city_display:
+                city_en = en_key
+                break
+        city_tw = city_display
+
+    # 更新按鈕
+    if st.sidebar.button(f"🔄 {t('sidebar.update_btn')}", type="primary", use_container_width=True):
         if not active_owm:
-            st.sidebar.error("❌ 請先輸入 OpenWeatherMap API Key")
+            st.sidebar.error(f"❌ {t('sidebar.no_owm_key')}")
         else:
-            # 清除快取強制重新載入
             st.cache_data.clear()
-            with st.spinner("正在載入天氣資料..."):
+            with st.spinner(t("app.loading_weather")):
                 fetch_weather_data(city_en)
-                st.success("✅ 資料更新成功！")
+                st.success(f"✅ {t('app.data_updated')}")
 
     st.sidebar.markdown("---")
 
     # ── 系統資訊 ──
-    st.sidebar.subheader("📊 系統資訊")
+    st.sidebar.subheader(f"📊 {t('sidebar.sys_info')}")
     active_oai = _get_active_api_key("sidebar_oai_key", oai_env)
-    ai_mode = "🤖 GPT 深度分析" if active_oai else "📊 基礎規則分析"
+    ai_mode = f"🤖 {t('sidebar.ai_mode_gpt')}" if active_oai else f"📊 {t('sidebar.ai_mode_rule')}"
 
+    city_display_name = WeatherAPI.get_city_display_name(city_en)
     st.sidebar.info(f"""
-    **資料來源**: OpenWeatherMap
-    **當前城市**: {city_tw}
-    **分析模式**: {ai_mode}
-    **快取時間**: {config.CACHE_EXPIRE_MINUTES} 分鐘
-    **更新時間**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    **{t('sidebar.data_source')}**: OpenWeatherMap
+    **{t('sidebar.current_city')}**: {city_display_name}
+    **{t('sidebar.analysis_mode')}**: {ai_mode}
+    **{t('sidebar.cache_time')}**: {t('sidebar.cache_minutes', n=config.CACHE_EXPIRE_MINUTES)}
+    **{t('sidebar.update_time')}**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     """)
 
     return city_en, city_tw
@@ -247,6 +410,44 @@ def fetch_weather_data(city):
     st.session_state.ai_analysis = None
     st.session_state.last_city = city
 
+    # 計算天氣警報
+    rule_alerts = evaluate_alerts(
+        st.session_state.current_weather,
+        st.session_state.daily_summary,
+    )
+
+    # One Call 官方警報
+    active_onecall = _get_active_api_key("sidebar_onecall_key", config.ONECALL_API_KEY)
+    onecall_alerts = []
+    if active_onecall and city in config.TAIWAN_CITIES_COORDS:
+        coords = config.TAIWAN_CITIES_COORDS[city]
+        onecall_alerts = evaluate_onecall_alerts(active_onecall, coords["lat"], coords["lon"])
+
+    st.session_state.weather_alerts = rule_alerts + onecall_alerts
+
+
+# ── 天氣警報顯示 ──
+
+def display_weather_alerts():
+    """顯示天氣警報（header 下、tabs 上）"""
+    alerts = st.session_state.get("weather_alerts", [])
+    if not alerts:
+        return
+
+    st.subheader(f"⚠️ {t('alert.section_title')}")
+    for alert in alerts:
+        title = t(alert.title_key)
+        # 官方警報使用 raw 文字
+        if hasattr(alert, "_raw_event") and alert._raw_event:
+            msg = f"**{alert._raw_event}**: {getattr(alert, '_raw_description', '')}"
+        else:
+            msg = t(alert.message_key, v=alert.value, t=alert.threshold)
+
+        if alert.severity == AlertSeverity.DANGER:
+            st.error(f"{alert.icon} **{title}** — {msg}")
+        else:
+            st.warning(f"{alert.icon} **{title}** — {msg}")
+
 
 # ── 頁面顯示 ──
 
@@ -255,21 +456,24 @@ def display_current_weather():
     weather = st.session_state.current_weather
 
     if not weather:
-        st.info("👈 請在側邊欄輸入 OpenWeatherMap API Key 並點擊「更新天氣資料」")
+        st.info(f"👈 {t('app.no_data_hint')}")
         return
 
-    st.subheader(f"📍 {weather['city_tw']} 即時天氣")
+    st.subheader(f"📍 {t('current.title', city=weather['city_tw'])}")
 
+    # metric 卡片外包 metric-row（RWD 2×2）
+    st.markdown('<div class="metric-row">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(label="🌡️ 溫度", value=f"{weather['temperature']}°C",
-                  delta=f"體感 {weather['feels_like']}°C")
+        st.metric(label=f"🌡️ {t('metric.temperature')}", value=f"{weather['temperature']}°C",
+                  delta=t("metric.feels_like", v=weather['feels_like']))
     with col2:
-        st.metric(label="💧 濕度", value=f"{weather['humidity']}%")
+        st.metric(label=f"💧 {t('metric.humidity')}", value=f"{weather['humidity']}%")
     with col3:
-        st.metric(label="💨 風速", value=f"{weather['wind_speed']} m/s")
+        st.metric(label=f"💨 {t('metric.wind_speed')}", value=f"{weather['wind_speed']} m/s")
     with col4:
-        st.metric(label="☁️ 雲量", value=f"{weather['clouds']}%")
+        st.metric(label=f"☁️ {t('metric.clouds')}", value=f"{weather['clouds']}%")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # 天氣狀況卡片
     st.markdown('<div class="weather-card">', unsafe_allow_html=True)
@@ -281,10 +485,10 @@ def display_current_weather():
         st.markdown(f"""
         ### {weather['weather']}
 
-        **最高溫**: {weather['temp_max']}°C | **最低溫**: {weather['temp_min']}°C
-        **氣壓**: {weather['pressure']} hPa
-        **日出**: {weather['sunrise'].strftime('%H:%M')} | **日落**: {weather['sunset'].strftime('%H:%M')}
-        **資料時間**: {weather['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}
+        **{t('metric.temp_max')}**: {weather['temp_max']}°C | **{t('metric.temp_min')}**: {weather['temp_min']}°C
+        **{t('metric.pressure')}**: {weather['pressure']} hPa
+        **{t('metric.sunrise')}**: {weather['sunrise'].strftime('%H:%M')} | **{t('metric.sunset')}**: {weather['sunset'].strftime('%H:%M')}
+        **{t('metric.data_time')}**: {weather['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}
         """)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -295,11 +499,11 @@ def display_forecast_charts():
     daily_summary = st.session_state.daily_summary
 
     if not forecast_data or not daily_summary:
-        st.warning("⚠️ 無預報資料")
+        st.warning(f"⚠️ {t('current.no_data')}")
         return
 
     st.markdown("---")
-    st.subheader("📊 天氣預報分析")
+    st.subheader(f"📊 {t('forecast.title')}")
 
     st.plotly_chart(
         WeatherCharts.create_daily_summary_chart(daily_summary),
@@ -336,13 +540,22 @@ def display_daily_forecast_table():
         return
 
     st.markdown("---")
-    st.subheader("📅 未來5天天氣預報")
+    st.subheader(f"📅 {t('daily.title')}")
 
+    lang = get_lang()
+
+    # ── 桌面版：5 欄並排 ──
+    st.markdown('<div class="desktop-only">', unsafe_allow_html=True)
     cols = st.columns(5)
     for idx, day in enumerate(daily_summary):
         with cols[idx]:
-            st.markdown(f"**{day['date'].strftime('%m月%d日')}**")
-            st.markdown(f"*{['一','二','三','四','五','六','日'][day['date'].weekday()]}*")
+            if lang == "zh_tw":
+                date_str = f"{day['date'].month}月{day['date'].day}日"
+            else:
+                date_str = day['date'].strftime('%m/%d')
+            wd = weekday_name(day['date'].weekday())
+            st.markdown(f"**{date_str}**")
+            st.markdown(f"*{wd}*")
             icon_url = WeatherAPI.get_weather_icon_url(day['icon'])
             st.image(icon_url, width=80)
             st.markdown(f"""
@@ -351,6 +564,29 @@ def display_daily_forecast_table():
             💨 {day['wind_speed_avg']} m/s
             {day['weather']}
             """)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── 手機版：可展開的逐日卡片 ──
+    st.markdown('<div class="mobile-only">', unsafe_allow_html=True)
+    for day in daily_summary:
+        if lang == "zh_tw":
+            date_str = f"{day['date'].month}月{day['date'].day}日"
+        else:
+            date_str = day['date'].strftime('%m/%d')
+        wd = weekday_name(day['date'].weekday())
+        label = t("daily.expand_label",
+                   date=date_str, weekday=wd,
+                   tmin=day['temp_min'], tmax=day['temp_max'])
+        with st.expander(label):
+            icon_url = WeatherAPI.get_weather_icon_url(day['icon'])
+            st.image(icon_url, width=60)
+            st.markdown(f"""
+            - 🌡️ {t('metric.temperature')}: {day['temp_min']}°C ~ {day['temp_max']}°C
+            - 💧 {t('metric.rain_prob')}: {int(day['pop_max'])}%
+            - 💨 {t('metric.wind_speed')}: {day['wind_speed_avg']} m/s
+            - {day['weather']}
+            """)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def display_ai_analysis():
@@ -359,82 +595,92 @@ def display_ai_analysis():
     daily_summary = st.session_state.daily_summary
 
     if not current_weather or not daily_summary:
-        st.warning("⚠️ 請先更新天氣資料")
+        st.warning(f"⚠️ {t('current.no_data')}")
         return
 
     active_oai = _get_active_api_key("sidebar_oai_key", config.OPENAI_API_KEY)
     if active_oai:
-        st.subheader("🤖 AI智慧分析（GPT 深度分析）")
+        st.subheader(f"🤖 {t('ai.subheader_gpt')}")
     else:
-        st.subheader("📊 AI智慧分析（基礎規則分析）")
-        st.caption("💡 輸入 OpenAI API Key 可升級為 GPT 深度分析模式")
+        st.subheader(f"📊 {t('ai.subheader_rule')}")
+        st.caption(f"💡 {t('ai.upgrade_hint')}")
 
-    st.markdown(f"**分析城市**: {current_weather['city_tw']} | **分析時間**: {datetime.now().strftime('%H:%M:%S')}")
+    st.markdown(f"**{t('ai.analysis_city')}**: {current_weather['city_tw']} | "
+                f"**{t('ai.analysis_time')}**: {datetime.now().strftime('%H:%M:%S')}")
 
-    button_label = "🔮 生成 GPT 深度分析" if active_oai else "📊 生成基礎規則分析"
+    button_label = f"🔮 {t('ai.btn_gpt')}" if active_oai else f"📊 {t('ai.btn_rule')}"
     if st.button(button_label, type="primary", use_container_width=True):
         ai_analyzer = WeatherAIAnalyzer(api_key=active_oai)
-        with st.spinner("正在分析天氣資料中..."):
-            st.session_state.ai_analysis = ai_analyzer.comprehensive_analysis(
-                current_weather, daily_summary
-            )
+        # 骨架屏替代 spinner
+        skeleton = st.empty()
+        with skeleton.container():
+            st.markdown('<div class="skeleton skeleton-card"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="skeleton skeleton-chart"></div>', unsafe_allow_html=True)
+        st.session_state.ai_analysis = ai_analyzer.comprehensive_analysis(
+            current_weather, daily_summary
+        )
+        skeleton.empty()
 
     if st.session_state.ai_analysis:
         analysis = st.session_state.ai_analysis
         mode = analysis.get("mode", "fallback")
 
         if mode == "gpt":
-            st.success("🤖 以下為 GPT 深度分析結果")
+            st.success(f"🤖 {t('ai.result_gpt')}")
         else:
-            st.info("📊 以下為基礎規則分析結果（輸入 OpenAI Key 可升級）")
+            st.info(f"📊 {t('ai.result_rule')}")
 
         tab1, tab2, tab3, tab4 = st.tabs([
-            "🧠 天氣分析", "🎯 活動建議", "👔 穿搭建議", "💪 健康建議"
+            f"🧠 {t('ai.tab_weather')}",
+            f"🎯 {t('ai.tab_activities')}",
+            f"👔 {t('ai.tab_outfit')}",
+            f"💪 {t('ai.tab_health')}",
         ])
 
         with tab1:
             st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-            st.markdown("### 🧠 專業天氣分析")
+            st.markdown(f"### 🧠 {t('ai.card_weather')}")
             st.markdown(analysis['weather_analysis'])
             st.markdown('</div>', unsafe_allow_html=True)
         with tab2:
             st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-            st.markdown("### 🎯 個人化活動建議")
+            st.markdown(f"### 🎯 {t('ai.card_activities')}")
             st.markdown(analysis['activities'])
             st.markdown('</div>', unsafe_allow_html=True)
         with tab3:
             st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-            st.markdown("### 👔 智慧穿搭建議")
+            st.markdown(f"### 👔 {t('ai.card_outfit')}")
             st.markdown(analysis['outfit'])
             st.markdown('</div>', unsafe_allow_html=True)
         with tab4:
             st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-            st.markdown("### 💪 健康照護建議")
+            st.markdown(f"### 💪 {t('ai.card_health')}")
             st.markdown(analysis['health'])
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("---")
+        mode_label = t("ai.report_mode_gpt") if mode == "gpt" else t("ai.report_mode_rule")
         analysis_text = f"""
-智慧天氣分析報告
+{t('ai.report_title')}
 ================
-城市: {current_weather['city_tw']}
-分析時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-分析模式: {"GPT 深度分析" if mode == "gpt" else "基礎規則分析"}
+{t('ai.report_city')}: {current_weather['city_tw']}
+{t('ai.report_time')}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+{t('ai.report_mode')}: {mode_label}
 
-【天氣分析】
+【{t('ai.report_section_weather')}】
 {analysis['weather_analysis']}
 
-【活動建議】
+【{t('ai.report_section_activities')}】
 {analysis['activities']}
 
-【穿搭建議】
+【{t('ai.report_section_outfit')}】
 {analysis['outfit']}
 
-【健康建議】
+【{t('ai.report_section_health')}】
 {analysis['health']}
 """
         st.download_button(
-            label="📥 下載分析報告",
+            label=f"📥 {t('ai.download_btn')}",
             data=analysis_text,
             file_name=f"weather_analysis_{current_weather['city_tw']}_{datetime.now().strftime('%Y%m%d')}.txt",
             mime="text/plain"
@@ -446,6 +692,7 @@ def display_ai_analysis():
 def main():
     """主程式"""
     initialize_session_state()
+    _inject_theme_css()
     display_header()
 
     city_en, city_tw = display_sidebar()
@@ -456,12 +703,22 @@ def main():
     first_load = st.session_state.current_weather is None
 
     if active_owm and (first_load or city_changed):
-        with st.spinner(f"正在載入 {city_tw} 的天氣資料..."):
-            fetch_weather_data(city_en)
+        # 骨架屏載入
+        skeleton = st.empty()
+        with skeleton.container():
+            display_skeleton_loading()
+        fetch_weather_data(city_en)
+        skeleton.empty()
+
+    # 天氣警報（在 tabs 上方）
+    display_weather_alerts()
 
     # 主要內容區域
     tab1, tab2, tab3, tab4 = st.tabs([
-        "🏠 即時天氣", "📊 預報圖表", "📅 每日預報", "🤖 AI智慧分析"
+        f"🏠 {t('tab.current')}",
+        f"📊 {t('tab.charts')}",
+        f"📅 {t('tab.daily')}",
+        f"🤖 {t('tab.ai')}",
     ])
 
     with tab1:
@@ -475,10 +732,9 @@ def main():
 
     # 頁尾
     st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; color: #666;'>
-        <p>智慧天氣分析系統 v1.0.0 | 資料來源: OpenWeatherMap | AI: OpenAI GPT / 規則引擎 |
-        Made with ❤️ using Streamlit</p>
+    st.markdown(f"""
+    <div style='text-align: center; color: var(--footer-color);'>
+        <p>{t('app.footer')}</p>
     </div>
     """, unsafe_allow_html=True)
 

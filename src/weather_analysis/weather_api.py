@@ -5,6 +5,7 @@ import requests
 import streamlit as st
 from datetime import datetime, timedelta
 from weather_analysis import config
+from weather_analysis.i18n import t, get_lang
 
 
 class WeatherAPI:
@@ -14,7 +15,6 @@ class WeatherAPI:
         self.api_key = api_key or config.OPENWEATHER_API_KEY
         self.base_url = config.OPENWEATHER_BASE_URL
         self.units = config.UNITS
-        self.lang = config.LANG
 
     # ── 驗證 ──
 
@@ -35,24 +35,28 @@ class WeatherAPI:
             }
             resp = requests.get(url, params=params, timeout=8)
             if resp.status_code == 200:
-                return True, "API Key 有效"
+                return True, t("api.key_valid")
             if resp.status_code == 401:
-                return False, "API Key 無效或尚未啟用"
-            return False, f"驗證失敗 (HTTP {resp.status_code})"
+                return False, t("api.key_invalid")
+            return False, t("api.key_fail", code=resp.status_code)
         except requests.exceptions.Timeout:
-            return False, "連線逾時，請稍後再試"
+            return False, t("api.timeout")
         except requests.exceptions.RequestException as e:
-            return False, f"網路錯誤: {e}"
+            return False, t("api.network_error", e=e)
 
     # ── 資料查詢（帶快取） ──
 
     def get_current_weather(self, city):
         """取得即時天氣資料（透過快取層）"""
-        return _cached_current_weather(self.api_key, city)
+        lang = get_lang()
+        owm_lang = "zh_tw" if lang == "zh_tw" else "en"
+        return _cached_current_weather(self.api_key, city, owm_lang)
 
     def get_forecast(self, city, days=5):
         """取得天氣預報資料（透過快取層）"""
-        return _cached_forecast(self.api_key, city)
+        lang = get_lang()
+        owm_lang = "zh_tw" if lang == "zh_tw" else "en"
+        return _cached_forecast(self.api_key, city, owm_lang)
 
     def get_daily_forecast_summary(self, city, days=5):
         """取得每日天氣預報摘要"""
@@ -87,11 +91,13 @@ class WeatherAPI:
 
         return daily_summary
 
-    def _get_tw_city_name(self, city_en):
-        """取得中文城市名稱"""
-        for tw, en in config.TAIWAN_CITIES.items():
-            if en == city_en:
-                return tw
+    @staticmethod
+    def get_city_display_name(city_en):
+        """取得城市顯示名稱（依當前語言）"""
+        lang = get_lang()
+        entry = config.TAIWAN_CITIES_I18N.get(city_en)
+        if entry:
+            return entry.get(lang, city_en)
         return city_en
 
     @staticmethod
@@ -103,7 +109,7 @@ class WeatherAPI:
 # ── 快取函式（模組層級，供 @st.cache_data 使用） ──
 
 @st.cache_data(ttl=config.CACHE_EXPIRE_MINUTES * 60, show_spinner=False)
-def _cached_current_weather(api_key, city):
+def _cached_current_weather(api_key, city, lang):
     """快取即時天氣（TTL 15 分鐘）"""
     try:
         url = f"{config.OPENWEATHER_BASE_URL}/weather"
@@ -111,22 +117,18 @@ def _cached_current_weather(api_key, city):
             'q': f"{city},TW",
             'appid': api_key,
             'units': config.UNITS,
-            'lang': config.LANG,
+            'lang': lang,
         }
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
-        # 取得中文城市名
-        city_tw = city
-        for tw, en in config.TAIWAN_CITIES.items():
-            if en == city:
-                city_tw = tw
-                break
+        # 取得顯示用城市名稱
+        city_display = WeatherAPI.get_city_display_name(city)
 
         return {
             'city': city,
-            'city_tw': city_tw,
+            'city_tw': city_display,
             'temperature': round(data['main']['temp'], 1),
             'feels_like': round(data['main']['feels_like'], 1),
             'temp_min': round(data['main']['temp_min'], 1),
@@ -143,15 +145,15 @@ def _cached_current_weather(api_key, city):
             'timestamp': datetime.fromtimestamp(data['dt']),
         }
     except requests.exceptions.RequestException as e:
-        st.error(f"API 請求錯誤: {e}")
+        st.error(t("api.error_request", e=e))
         return None
     except KeyError as e:
-        st.error(f"資料解析錯誤: {e}")
+        st.error(t("api.error_parse", e=e))
         return None
 
 
 @st.cache_data(ttl=config.CACHE_EXPIRE_MINUTES * 60, show_spinner=False)
-def _cached_forecast(api_key, city):
+def _cached_forecast(api_key, city, lang):
     """快取預報資料（TTL 15 分鐘）"""
     try:
         url = f"{config.OPENWEATHER_BASE_URL}/forecast"
@@ -159,7 +161,7 @@ def _cached_forecast(api_key, city):
             'q': f"{city},TW",
             'appid': api_key,
             'units': config.UNITS,
-            'lang': config.LANG,
+            'lang': lang,
         }
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
@@ -183,8 +185,8 @@ def _cached_forecast(api_key, city):
             })
         return forecast_list
     except requests.exceptions.RequestException as e:
-        st.error(f"API 請求錯誤: {e}")
+        st.error(t("api.error_request", e=e))
         return None
     except KeyError as e:
-        st.error(f"資料解析錯誤: {e}")
+        st.error(t("api.error_parse", e=e))
         return None

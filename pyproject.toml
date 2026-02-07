@@ -1,6 +1,6 @@
 [project]
 name = "weather-analysis-system"
-version = "1.0.0"
+version = "1.1.0"
 description = "智慧天氣分析系統 - 即時天氣查詢與 AI 智慧分析，支援台灣主要城市"
 readme = "README.md"
 license = {text = "MIT"}
