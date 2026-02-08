@@ -120,6 +120,9 @@ def _cached_current_weather(api_key, city, lang):
             'lang': lang,
         }
         response = requests.get(url, params=params, timeout=10)
+        if response.status_code == 401:
+            st.error(t("api.key_invalid"))
+            return None
         response.raise_for_status()
         data = response.json()
 
@@ -144,8 +147,8 @@ def _cached_current_weather(api_key, city, lang):
             'sunset': datetime.fromtimestamp(data['sys']['sunset']),
             'timestamp': datetime.fromtimestamp(data['dt']),
         }
-    except requests.exceptions.RequestException as e:
-        st.error(t("api.error_request", e=e))
+    except requests.exceptions.RequestException:
+        st.error(t("api.error_request_safe"))
         return None
     except KeyError as e:
         st.error(t("api.error_parse", e=e))
@@ -164,6 +167,9 @@ def _cached_forecast(api_key, city, lang):
             'lang': lang,
         }
         response = requests.get(url, params=params, timeout=10)
+        if response.status_code == 401:
+            st.error(t("api.key_invalid"))
+            return None
         response.raise_for_status()
         data = response.json()
 
@@ -184,8 +190,8 @@ def _cached_forecast(api_key, city, lang):
                 'pop': round(item.get('pop', 0) * 100, 0),
             })
         return forecast_list
-    except requests.exceptions.RequestException as e:
-        st.error(t("api.error_request", e=e))
+    except requests.exceptions.RequestException:
+        st.error(t("api.error_request_safe"))
         return None
     except KeyError as e:
         st.error(t("api.error_parse", e=e))

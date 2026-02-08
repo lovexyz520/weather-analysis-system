@@ -476,20 +476,14 @@ def _validate_onecall_key(api_key):
 
 
 def _validate_aqi_key(api_key):
-    """輕量驗證 AQI API Key（取 1 筆測試）"""
+    """輕量驗證 AQI API Key（HTTP 200 即視為有效）"""
     try:
         import requests
         params = {"api_key": api_key, "limit": 1, "format": "JSON"}
-        resp = requests.get("https://data.moenv.gov.tw/api/v2/aqx_p_432", params=params, timeout=8)
-        if resp.status_code != 200:
-            return False
-        data = resp.json()
-        if isinstance(data, list):
-            return len(data) > 0
-        if isinstance(data, dict):
-            records = data.get("records", data.get("result", {}).get("records", []))
-            return len(records) > 0
-        return False
+        resp = requests.get("https://data.moenv.gov.tw/api/v2/aqx_p_432", params=params, timeout=10)
+        # 只要 HTTP 200 就算 key 有效
+        # （Streamlit Cloud 在海外，MOENV API 可能回傳空資料但 key 本身是正確的）
+        return resp.status_code == 200
     except Exception:
         return False
 
