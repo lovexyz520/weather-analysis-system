@@ -534,7 +534,13 @@ def display_current_weather():
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 分享功能 ──
-    share_url = f"?city={weather['city']}&lang={get_lang()}"
+    # 組合完整 URL（自動偵測 Streamlit Cloud 或 localhost）
+    import urllib.parse
+    _base = st.context.headers.get("Host", "localhost:8501")
+    _scheme = "https" if "streamlit.app" in _base or "share.streamlit.io" in _base else "http"
+    _query = urllib.parse.urlencode({"city": weather["city"], "lang": get_lang()})
+    share_url = f"{_scheme}://{_base}/?{_query}"
+
     summary_text = t("share.summary_template",
                      city=weather["city_tw"],
                      temp=weather["temperature"],
@@ -544,9 +550,8 @@ def display_current_weather():
                      wind=weather["wind_speed"])
 
     with st.expander(f"🔗 {t('share.title')}"):
-        st.code(share_url, language=None)
-        st.caption(t("share.btn"))
-        st.text_area(t("share.text_btn"), value=summary_text, height=80)
+        st.text_input(t("share.btn"), value=share_url, disabled=True)
+        st.text_area(t("share.text_btn"), value=f"{summary_text}\n{share_url}", height=100)
 
     # ── UV 指數（需 One Call API Key） ──
     active_onecall = _get_active_api_key("sidebar_onecall_key", config.ONECALL_API_KEY)
