@@ -205,6 +205,10 @@ def initialize_session_state():
         "owm_validated_key": "",
         "oai_validated": None,
         "oai_validated_key": "",
+        "onecall_validated": None,
+        "onecall_validated_key": "",
+        "aqi_validated": None,
+        "aqi_validated_key": "",
         "ui_lang": "zh_tw",
         "weather_alerts": [],
         "_query_params_applied": False,
@@ -338,9 +342,18 @@ def display_sidebar():
     )
 
     sidebar_onecall_input = st.session_state.get("sidebar_onecall_key", "")
-    if not sidebar_onecall_input and onecall_env:
+    if sidebar_onecall_input:
+        if sidebar_onecall_input != st.session_state.onecall_validated_key:
+            ok = _validate_onecall_key(sidebar_onecall_input)
+            st.session_state.onecall_validated = ok
+            st.session_state.onecall_validated_key = sidebar_onecall_input
+        if st.session_state.onecall_validated:
+            st.sidebar.caption(f"✅ {t('sidebar.onecall_valid')}")
+        else:
+            st.sidebar.caption(f"❌ {t('sidebar.onecall_invalid')}")
+    elif onecall_env:
         st.sidebar.caption(f"✅ {t('sidebar.onecall_env_loaded')}")
-    elif not sidebar_onecall_input:
+    else:
         st.sidebar.caption(f"ℹ️ {t('sidebar.onecall_not_set')}")
 
     # --- AQI API Key（可選） ---
@@ -354,9 +367,18 @@ def display_sidebar():
     )
 
     sidebar_aqi_input = st.session_state.get("sidebar_aqi_key", "")
-    if not sidebar_aqi_input and aqi_env:
+    if sidebar_aqi_input:
+        if sidebar_aqi_input != st.session_state.aqi_validated_key:
+            ok = _validate_aqi_key(sidebar_aqi_input)
+            st.session_state.aqi_validated = ok
+            st.session_state.aqi_validated_key = sidebar_aqi_input
+        if st.session_state.aqi_validated:
+            st.sidebar.caption(f"✅ {t('sidebar.aqi_valid')}")
+        else:
+            st.sidebar.caption(f"❌ {t('sidebar.aqi_invalid')}")
+    elif aqi_env:
         st.sidebar.caption(f"✅ {t('sidebar.aqi_env_loaded')}")
-    elif not sidebar_aqi_input:
+    else:
         st.sidebar.caption(f"ℹ️ {t('sidebar.aqi_not_set')}")
 
     st.sidebar.markdown("---")
@@ -434,6 +456,40 @@ def _validate_openai_key(api_key):
         client = OpenAI(api_key=api_key)
         client.models.list()
         return True
+    except Exception:
+        return False
+
+
+def _validate_onecall_key(api_key):
+    """輕量驗證 One Call API Key（用台北座標測試）"""
+    try:
+        import requests
+        url = f"{config.ONECALL_BASE_URL}/onecall"
+        params = {
+            "lat": 25.033, "lon": 121.565,
+            "appid": api_key, "exclude": "minutely,hourly,daily,alerts",
+        }
+        resp = requests.get(url, params=params, timeout=8)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def _validate_aqi_key(api_key):
+    """輕量驗證 AQI API Key（取 1 筆測試）"""
+    try:
+        import requests
+        params = {"api_key": api_key, "limit": 1, "format": "JSON"}
+        resp = requests.get("https://data.moenv.gov.tw/api/v2/aqx_p_432", params=params, timeout=8)
+        if resp.status_code != 200:
+            return False
+        data = resp.json()
+        if isinstance(data, list):
+            return len(data) > 0
+        if isinstance(data, dict):
+            records = data.get("records", data.get("result", {}).get("records", []))
+            return len(records) > 0
+        return False
     except Exception:
         return False
 

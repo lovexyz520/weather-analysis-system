@@ -74,6 +74,14 @@ TRANSLATIONS = {
         "zh_tw": "未設定（僅使用規則警報）",
         "en": "Not set (rule-based alerts only)",
     },
+    "sidebar.onecall_valid": {
+        "zh_tw": "One Call API Key 驗證成功",
+        "en": "One Call API Key is valid",
+    },
+    "sidebar.onecall_invalid": {
+        "zh_tw": "One Call API Key 無效",
+        "en": "One Call API Key is invalid",
+    },
     "sidebar.city_label": {"zh_tw": "選擇城市", "en": "Select City"},
     "sidebar.update_btn": {"zh_tw": "更新天氣資料", "en": "Update Weather"},
     "sidebar.no_owm_key": {
@@ -680,6 +688,14 @@ TRANSLATIONS = {
     "sidebar.aqi_not_set": {
         "zh_tw": "未設定（空氣品質功能停用）",
         "en": "Not set (AQI feature disabled)",
+    },
+    "sidebar.aqi_valid": {
+        "zh_tw": "AQI API Key 驗證成功",
+        "en": "AQI API Key is valid",
+    },
+    "sidebar.aqi_invalid": {
+        "zh_tw": "AQI API Key 無效，請確認金鑰是否正確",
+        "en": "AQI API Key is invalid, please check your key",
     },
 
     # ── map ──

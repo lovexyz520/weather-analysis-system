@@ -41,12 +41,17 @@ def fetch_aqi_data(api_key: str) -> list[dict] | None:
         resp = requests.get(AQI_API_URL, params=params, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        # API 可能回傳 list 或 {"records": list}
+        # API 回傳格式不固定：list | {"records": [...]} | {"result": {"records": [...]}}
+        records = []
         if isinstance(data, list):
             records = data
         elif isinstance(data, dict):
-            records = data.get("records", [])
-        else:
+            records = (
+                data.get("records")
+                or data.get("result", {}).get("records")
+                or []
+            )
+        if not isinstance(records, list):
             return None
         if not records:
             return None
