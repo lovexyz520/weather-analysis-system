@@ -10,8 +10,8 @@ TRANSLATIONS = {
     "app.page_title": {"zh_tw": "智慧天氣分析系統", "en": "Smart Weather Analysis"},
     "app.header": {"zh_tw": "智慧天氣分析系統", "en": "Smart Weather Analysis"},
     "app.footer": {
-        "zh_tw": "智慧天氣分析系統 v1.1.0 | 資料來源: OpenWeatherMap | AI: OpenAI GPT / 規則引擎 | Made with ❤️ using Streamlit",
-        "en": "Smart Weather Analysis v1.1.0 | Data: OpenWeatherMap | AI: OpenAI GPT / Rule Engine | Made with ❤️ using Streamlit",
+        "zh_tw": "智慧天氣分析系統 v1.2.0 | 資料來源: OpenWeatherMap | AI: OpenAI GPT / 規則引擎 | Made with ❤️ using Streamlit",
+        "en": "Smart Weather Analysis v1.2.0 | Data: OpenWeatherMap | AI: OpenAI GPT / Rule Engine | Made with ❤️ using Streamlit",
     },
     "app.no_data_hint": {
         "zh_tw": "請在側邊欄輸入 OpenWeatherMap API Key 並點擊「更新天氣資料」",
@@ -595,6 +595,156 @@ TRANSLATIONS = {
         "en": "Daily temp swing {v}°C (over {t}°C) — adjust clothing accordingly.",
     },
     "alert.official_title": {"zh_tw": "官方天氣警報", "en": "Official Weather Alert"},
+
+    # ── tabs (new v1.2) ──
+    "tab.travel": {"zh_tw": "旅遊推薦", "en": "Travel Picks"},
+    "tab.compare": {"zh_tw": "城市比較", "en": "City Compare"},
+    "tab.aqi": {"zh_tw": "空氣品質", "en": "Air Quality"},
+    "tab.map": {"zh_tw": "天氣地圖", "en": "Weather Map"},
+
+    # ── travel recommendation ──
+    "travel.title": {"zh_tw": "旅遊最佳日推薦", "en": "Best Travel Day Picks"},
+    "travel.subtitle": {
+        "zh_tw": "根據溫度、降雨、風速、濕度綜合評分，推薦最適合出遊的日子",
+        "en": "Comprehensive scoring based on temperature, rain, wind, and humidity",
+    },
+    "travel.best_day": {"zh_tw": "推薦", "en": "Recommended"},
+    "travel.score": {"zh_tw": "評分", "en": "Score"},
+    "travel.score_unit": {"zh_tw": "分", "en": "pts"},
+    "travel.reason_temp_good": {"zh_tw": "溫度舒適宜人", "en": "Comfortable temperature"},
+    "travel.reason_temp_hot": {"zh_tw": "氣溫偏高", "en": "High temperature"},
+    "travel.reason_temp_cold": {"zh_tw": "氣溫偏低", "en": "Low temperature"},
+    "travel.reason_rain_low": {"zh_tw": "降雨機率低", "en": "Low rain probability"},
+    "travel.reason_rain_high": {"zh_tw": "降雨機率高", "en": "High rain probability"},
+    "travel.reason_wind_calm": {"zh_tw": "風力平穩", "en": "Calm winds"},
+    "travel.reason_wind_strong": {"zh_tw": "風速偏大", "en": "Strong winds"},
+    "travel.reason_humidity_good": {"zh_tw": "濕度適中", "en": "Moderate humidity"},
+    "travel.dim_temp": {"zh_tw": "溫度", "en": "Temperature"},
+    "travel.dim_rain": {"zh_tw": "降雨", "en": "Rain"},
+    "travel.dim_wind": {"zh_tw": "風速", "en": "Wind"},
+    "travel.dim_humidity": {"zh_tw": "濕度", "en": "Humidity"},
+    "travel.radar_title": {"zh_tw": "各維度評分雷達圖", "en": "Score Breakdown Radar"},
+    "travel.day_detail": {
+        "zh_tw": "均溫 {temp}°C / 降雨 {pop}% / 風速 {wind} m/s",
+        "en": "Avg {temp}°C / Rain {pop}% / Wind {wind} m/s",
+    },
+
+    # ── city comparison ──
+    "compare.title": {"zh_tw": "多城市天氣比較", "en": "Multi-City Weather Comparison"},
+    "compare.select_hint": {"zh_tw": "選擇 2-4 個城市進行比較", "en": "Select 2-4 cities to compare"},
+    "compare.select_label": {"zh_tw": "選擇比較城市", "en": "Select Cities"},
+    "compare.temp_chart": {"zh_tw": "溫度比較", "en": "Temperature Comparison"},
+    "compare.rain_chart": {"zh_tw": "降雨機率比較", "en": "Rain Probability Comparison"},
+    "compare.need_more": {"zh_tw": "請選擇至少 2 個城市", "en": "Please select at least 2 cities"},
+    "compare.loading": {"zh_tw": "正在載入 {city} 的資料...", "en": "Loading data for {city}..."},
+    "compare.no_owm_key": {
+        "zh_tw": "需要 OpenWeatherMap API Key 才能使用比較功能",
+        "en": "OpenWeatherMap API Key required for comparison",
+    },
+    "chart.compare_temp": {"zh_tw": "多城市溫度比較", "en": "Multi-City Temperature Comparison"},
+    "chart.compare_rain": {"zh_tw": "多城市降雨機率比較", "en": "Multi-City Rain Probability Comparison"},
+
+    # ── AQI ──
+    "aqi.title": {"zh_tw": "空氣品質指標 (AQI)", "en": "Air Quality Index (AQI)"},
+    "aqi.current_city": {"zh_tw": "{city} 空氣品質", "en": "{city} Air Quality"},
+    "aqi.station": {"zh_tw": "測站", "en": "Station"},
+    "aqi.level_good": {"zh_tw": "良好", "en": "Good"},
+    "aqi.level_moderate": {"zh_tw": "普通", "en": "Moderate"},
+    "aqi.level_sensitive": {"zh_tw": "對敏感族群不健康", "en": "Unhealthy for Sensitive Groups"},
+    "aqi.level_unhealthy": {"zh_tw": "不健康", "en": "Unhealthy"},
+    "aqi.level_very_unhealthy": {"zh_tw": "非常不健康", "en": "Very Unhealthy"},
+    "aqi.level_hazardous": {"zh_tw": "危害", "en": "Hazardous"},
+    "aqi.pollutant": {"zh_tw": "主要污染物", "en": "Primary Pollutant"},
+    "aqi.pm25": {"zh_tw": "PM2.5", "en": "PM2.5"},
+    "aqi.pm10": {"zh_tw": "PM10", "en": "PM10"},
+    "aqi.o3": {"zh_tw": "O3 臭氧", "en": "O3 Ozone"},
+    "aqi.no_key": {
+        "zh_tw": "請輸入環境部 AQI API Key 以查看空氣品質資料",
+        "en": "Enter MOENV AQI API Key to view air quality data",
+    },
+    "aqi.no_data": {"zh_tw": "無法取得 AQI 資料，請確認 API Key 是否正確", "en": "Failed to fetch AQI data, please check your API Key"},
+    "aqi.ranking_title": {"zh_tw": "12 城市 AQI 排行", "en": "12 Cities AQI Ranking"},
+    "aqi.ranking_city": {"zh_tw": "城市", "en": "City"},
+    "aqi.ranking_aqi": {"zh_tw": "AQI", "en": "AQI"},
+    "aqi.ranking_level": {"zh_tw": "等級", "en": "Level"},
+    "aqi.ranking_station": {"zh_tw": "測站", "en": "Station"},
+    "sidebar.aqi_label": {"zh_tw": "AQI API Key（可選）", "en": "AQI API Key (optional)"},
+    "sidebar.aqi_placeholder": {
+        "zh_tw": "輸入環境部 AQI API Key",
+        "en": "Enter MOENV AQI API Key",
+    },
+    "sidebar.aqi_env_loaded": {
+        "zh_tw": "已從環境變數載入 (AQI)",
+        "en": "Loaded from env (AQI)",
+    },
+    "sidebar.aqi_not_set": {
+        "zh_tw": "未設定（空氣品質功能停用）",
+        "en": "Not set (AQI feature disabled)",
+    },
+
+    # ── map ──
+    "map.title": {"zh_tw": "台灣天氣地圖", "en": "Taiwan Weather Map"},
+    "map.loading": {"zh_tw": "正在載入地圖...", "en": "Loading map..."},
+    "map.no_data": {"zh_tw": "無天氣資料可顯示於地圖", "en": "No weather data available for map"},
+    "map.popup_temp": {"zh_tw": "溫度", "en": "Temp"},
+    "map.popup_weather": {"zh_tw": "天氣", "en": "Weather"},
+    "map.popup_humidity": {"zh_tw": "濕度", "en": "Humidity"},
+    "map.popup_wind": {"zh_tw": "風速", "en": "Wind"},
+    "map.popup_aqi": {"zh_tw": "AQI", "en": "AQI"},
+    "map.legend_title": {"zh_tw": "溫度圖例", "en": "Temperature Legend"},
+    "map.no_owm_key": {
+        "zh_tw": "需要 OpenWeatherMap API Key 才能使用地圖功能",
+        "en": "OpenWeatherMap API Key required for map feature",
+    },
+
+    # ── UV Index ──
+    "uv.title": {"zh_tw": "紫外線指數 (UV Index)", "en": "UV Index"},
+    "uv.level_low": {"zh_tw": "低量", "en": "Low"},
+    "uv.level_moderate": {"zh_tw": "中量", "en": "Moderate"},
+    "uv.level_high": {"zh_tw": "高量", "en": "High"},
+    "uv.level_very_high": {"zh_tw": "過量", "en": "Very High"},
+    "uv.level_extreme": {"zh_tw": "危險", "en": "Extreme"},
+    "uv.advice_low": {
+        "zh_tw": "無需特別防護，可安心戶外活動。",
+        "en": "No protection needed. Safe for outdoor activities.",
+    },
+    "uv.advice_moderate": {
+        "zh_tw": "建議戴太陽眼鏡；正午前後注意遮蔽。",
+        "en": "Wear sunglasses; seek shade around midday.",
+    },
+    "uv.advice_high": {
+        "zh_tw": "需防曬措施：防曬乳 SPF30+、帽子、太陽眼鏡，減少 10-14 時曝曬。",
+        "en": "Protection needed: SPF30+ sunscreen, hat, sunglasses. Reduce exposure 10am-2pm.",
+    },
+    "uv.advice_very_high": {
+        "zh_tw": "加強防護：防曬乳 SPF50+、長袖衣物，儘量避免正午外出。",
+        "en": "Extra protection: SPF50+ sunscreen, long sleeves. Avoid midday sun.",
+    },
+    "uv.advice_extreme": {
+        "zh_tw": "極端紫外線！避免正午外出，必須做好完整防曬。",
+        "en": "Extreme UV! Avoid going outside during midday. Full sun protection required.",
+    },
+    "uv.no_onecall_key": {
+        "zh_tw": "需要 One Call API Key 才能顯示 UV 指數",
+        "en": "One Call API Key required for UV Index",
+    },
+    "uv.protection": {"zh_tw": "防曬建議", "en": "Sun Protection Advice"},
+
+    # ── heatmap ──
+    "chart.heatmap_temp_title": {"zh_tw": "溫度熱力圖（5天 x 24小時）", "en": "Temperature Heatmap (5 Days x 24h)"},
+    "chart.heatmap_rain_title": {"zh_tw": "降雨機率熱力圖（5天 x 24小時）", "en": "Rain Probability Heatmap (5 Days x 24h)"},
+    "chart.heatmap_hour": {"zh_tw": "時段", "en": "Hour"},
+    "chart.heatmap_date": {"zh_tw": "日期", "en": "Date"},
+
+    # ── share ──
+    "share.title": {"zh_tw": "分享天氣資訊", "en": "Share Weather Info"},
+    "share.btn": {"zh_tw": "複製分享連結", "en": "Copy Share Link"},
+    "share.copied": {"zh_tw": "分享連結已複製！", "en": "Share link copied!"},
+    "share.text_btn": {"zh_tw": "複製天氣摘要", "en": "Copy Weather Summary"},
+    "share.summary_template": {
+        "zh_tw": "{city} 天氣：{temp}°C {desc}，體感 {feels}°C，濕度 {humidity}%，風速 {wind} m/s",
+        "en": "{city} Weather: {temp}°C {desc}, feels {feels}°C, humidity {humidity}%, wind {wind} m/s",
+    },
 
     # ── weekday names ──
     "weekday.0": {"zh_tw": "一", "en": "Mon"},

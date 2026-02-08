@@ -12,6 +12,11 @@ from weather_analysis.alerts import (
     evaluate_alerts, evaluate_onecall_alerts,
     AlertSeverity,
 )
+from weather_analysis.travel import recommend_best_days
+from weather_analysis.aqi_api import (
+    fetch_aqi_data, get_city_aqi, get_aqi_level, get_all_cities_aqi,
+)
+from weather_analysis.weather_api import _cached_onecall_uvi, get_uv_level
 
 # 頁面設定
 st.set_page_config(
@@ -202,10 +207,23 @@ def initialize_session_state():
         "oai_validated_key": "",
         "ui_lang": "zh_tw",
         "weather_alerts": [],
+        "_query_params_applied": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
+
+    # 從 URL query params 載入城市 / 語言（僅首次）
+    if not st.session_state._query_params_applied:
+        qp = st.query_params
+        if "lang" in qp and qp["lang"] in ("zh_tw", "en"):
+            st.session_state.ui_lang = qp["lang"]
+        if "city" in qp:
+            # city param 用英文城市名
+            city_param = qp["city"]
+            if city_param in config.TAIWAN_CITIES_COORDS:
+                st.session_state["_share_city"] = city_param
+        st.session_state._query_params_applied = True
 
 
 def display_header():
@@ -325,6 +343,22 @@ def display_sidebar():
     elif not sidebar_onecall_input:
         st.sidebar.caption(f"ℹ️ {t('sidebar.onecall_not_set')}")
 
+    # --- AQI API Key（可選） ---
+    aqi_env = config.AQI_API_KEY
+    st.sidebar.text_input(
+        t("sidebar.aqi_label"),
+        value="",
+        type="password",
+        key="sidebar_aqi_key",
+        placeholder=t("sidebar.aqi_placeholder"),
+    )
+
+    sidebar_aqi_input = st.session_state.get("sidebar_aqi_key", "")
+    if not sidebar_aqi_input and aqi_env:
+        st.sidebar.caption(f"✅ {t('sidebar.aqi_env_loaded')}")
+    elif not sidebar_aqi_input:
+        st.sidebar.caption(f"ℹ️ {t('sidebar.aqi_not_set')}")
+
     st.sidebar.markdown("---")
 
     # ── 城市選擇 ──
@@ -335,6 +369,13 @@ def display_sidebar():
     else:
         city_display_list = [config.TAIWAN_CITIES_I18N[en]["en"] for en in config.TAIWAN_CITIES.values()]
         default_display = "Taipei"
+
+    # 從 URL query params 覆蓋預設城市
+    share_city = st.session_state.pop("_share_city", None)
+    if share_city:
+        entry = config.TAIWAN_CITIES_I18N.get(share_city)
+        if entry:
+            default_display = entry.get(lang, default_display)
 
     default_idx = city_display_list.index(default_display) if default_display in city_display_list else 0
 
@@ -492,6 +533,55 @@ def display_current_weather():
         """)
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── 分享功能 ──
+    share_url = f"?city={weather['city']}&lang={get_lang()}"
+    summary_text = t("share.summary_template",
+                     city=weather["city_tw"],
+                     temp=weather["temperature"],
+                     desc=weather["weather"],
+                     feels=weather["feels_like"],
+                     humidity=weather["humidity"],
+                     wind=weather["wind_speed"])
+
+    with st.expander(f"🔗 {t('share.title')}"):
+        st.code(share_url, language=None)
+        st.caption(t("share.btn"))
+        st.text_area(t("share.text_btn"), value=summary_text, height=80)
+
+    # ── UV 指數（需 One Call API Key） ──
+    active_onecall = _get_active_api_key("sidebar_onecall_key", config.ONECALL_API_KEY)
+    city_en = weather.get("city", "Taipei")
+    if active_onecall and city_en in config.TAIWAN_CITIES_COORDS:
+        coords = config.TAIWAN_CITIES_COORDS[city_en]
+        uv_data = _cached_onecall_uvi(active_onecall, coords["lat"], coords["lon"])
+        if uv_data:
+            uvi = uv_data["uvi"]
+            level_key, color = get_uv_level(uvi)
+            level_text = t(level_key)
+
+            # UV 建議
+            if uvi <= 2:
+                advice = t("uv.advice_low")
+            elif uvi <= 5:
+                advice = t("uv.advice_moderate")
+            elif uvi <= 7:
+                advice = t("uv.advice_high")
+            elif uvi <= 10:
+                advice = t("uv.advice_very_high")
+            else:
+                advice = t("uv.advice_extreme")
+
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, {color}33, {color}11);
+                        border-left: 5px solid {color};
+                        padding: 1rem 1.5rem; border-radius: 10px; margin: 1rem 0;">
+                <strong>☀️ {t('uv.title')}</strong>:
+                <span style="font-size: 1.5rem; font-weight: bold; color: {color};">{uvi}</span>
+                <span style="color: {color}; font-weight: bold;">({level_text})</span>
+                <br><small>🛡️ {t('uv.protection')}: {advice}</small>
+            </div>
+            """, unsafe_allow_html=True)
+
 
 def display_forecast_charts():
     """顯示預報圖表"""
@@ -530,6 +620,20 @@ def display_forecast_charts():
         WeatherCharts.create_wind_speed_chart(forecast_data),
         use_container_width=True
     )
+
+    # 熱力圖
+    st.markdown("---")
+    col_h1, col_h2 = st.columns(2)
+    with col_h1:
+        st.plotly_chart(
+            WeatherCharts.create_temp_heatmap(forecast_data),
+            use_container_width=True,
+        )
+    with col_h2:
+        st.plotly_chart(
+            WeatherCharts.create_rain_heatmap(forecast_data),
+            use_container_width=True,
+        )
 
 
 def display_daily_forecast_table():
@@ -687,6 +791,311 @@ def display_ai_analysis():
         )
 
 
+# ── 旅遊推薦 ──
+
+def display_travel_recommendation():
+    """顯示旅遊最佳日推薦"""
+    daily_summary = st.session_state.daily_summary
+
+    if not daily_summary:
+        st.warning(f"⚠️ {t('current.no_data')}")
+        return
+
+    st.subheader(f"✈️ {t('travel.title')}")
+    st.caption(t('travel.subtitle'))
+
+    results = recommend_best_days(daily_summary)
+    if not results:
+        return
+
+    lang = get_lang()
+
+    # 每日卡片
+    cols = st.columns(len(results))
+    for idx, day in enumerate(results):
+        with cols[idx]:
+            if lang == "zh_tw":
+                date_str = f"{day['date'].month}月{day['date'].day}日"
+            else:
+                date_str = day['date'].strftime('%m/%d')
+            wd = weekday_name(day['date'].weekday())
+
+            # 推薦標章
+            if day["recommended"]:
+                st.markdown(f"⭐ **{t('travel.best_day')}**")
+
+            st.markdown(f"**{date_str}** ({wd})")
+
+            icon_url = WeatherAPI.get_weather_icon_url(day['icon'])
+            st.image(icon_url, width=60)
+
+            # 分數（顏色依分數高低）
+            score = day["score"]
+            if score >= 75:
+                score_color = "🟢"
+            elif score >= 50:
+                score_color = "🟡"
+            else:
+                score_color = "🔴"
+            st.markdown(f"{score_color} **{t('travel.score')}**: {score} {t('travel.score_unit')}")
+
+            st.caption(t('travel.day_detail',
+                         temp=day['temp_avg'],
+                         pop=int(day['pop_max']),
+                         wind=day['wind_speed_avg']))
+
+            # 原因標籤
+            for reason_key in day["reasons"]:
+                st.markdown(f"- {t(reason_key)}")
+
+    # 雷達圖：最佳日的維度細項
+    st.markdown("---")
+    best = max(results, key=lambda x: x["score"])
+    if lang == "zh_tw":
+        best_label = f"{best['date'].month}月{best['date'].day}日"
+    else:
+        best_label = best['date'].strftime('%m/%d')
+    st.subheader(f"📊 {t('travel.radar_title')} — {best_label}")
+    st.plotly_chart(
+        WeatherCharts.create_travel_radar_chart(best["scores"]),
+        use_container_width=True,
+    )
+
+
+# ── 多城市比較 ──
+
+@st.fragment
+def display_city_comparison():
+    """顯示多城市天氣比較"""
+    active_owm = _get_active_api_key("sidebar_owm_key", config.OPENWEATHER_API_KEY)
+    if not active_owm:
+        st.warning(f"⚠️ {t('compare.no_owm_key')}")
+        return
+
+    st.subheader(f"🔄 {t('compare.title')}")
+
+    lang = get_lang()
+    if lang == "zh_tw":
+        city_options = list(config.TAIWAN_CITIES.keys())
+    else:
+        city_options = [config.TAIWAN_CITIES_I18N[en]["en"] for en in config.TAIWAN_CITIES.values()]
+
+    selected = st.multiselect(
+        t('compare.select_label'),
+        options=city_options,
+        default=city_options[:2],
+        max_selections=4,
+        help=t('compare.select_hint'),
+    )
+
+    if len(selected) < 2:
+        st.info(f"ℹ️ {t('compare.need_more')}")
+        return
+
+    # 把顯示名轉回英文城市名
+    selected_en = []
+    for name in selected:
+        if lang == "zh_tw":
+            selected_en.append(config.TAIWAN_CITIES[name])
+        else:
+            for en_key, names in config.TAIWAN_CITIES_I18N.items():
+                if names["en"] == name:
+                    selected_en.append(en_key)
+                    break
+
+    # 取得各城市資料
+    api = WeatherAPI(api_key=active_owm)
+    city_data_list = []
+    for city_en in selected_en:
+        daily = api.get_daily_forecast_summary(city_en)
+        if daily:
+            display_name = WeatherAPI.get_city_display_name(city_en)
+            city_data_list.append({
+                "city": display_name,
+                "daily_summary": daily,
+            })
+
+    if len(city_data_list) < 2:
+        st.warning(f"⚠️ {t('current.no_data')}")
+        return
+
+    st.plotly_chart(
+        WeatherCharts.create_comparison_temp_chart(city_data_list),
+        use_container_width=True,
+    )
+    st.plotly_chart(
+        WeatherCharts.create_comparison_rain_chart(city_data_list),
+        use_container_width=True,
+    )
+
+
+# ── 空氣品質 ──
+
+def display_aqi():
+    """顯示空氣品質 AQI"""
+    active_aqi = _get_active_api_key("sidebar_aqi_key", config.AQI_API_KEY)
+    if not active_aqi:
+        st.info(f"ℹ️ {t('aqi.no_key')}")
+        return
+
+    st.subheader(f"🌬️ {t('aqi.title')}")
+
+    all_data = fetch_aqi_data(active_aqi)
+    if not all_data:
+        st.warning(f"⚠️ {t('aqi.no_data')}")
+        return
+
+    # 當前城市 AQI
+    city_en = st.session_state.get("last_city", "Taipei")
+    city_info = get_city_aqi(all_data, city_en)
+    city_display = WeatherAPI.get_city_display_name(city_en)
+
+    if city_info:
+        level_key, color = get_aqi_level(city_info["aqi"])
+        level_text = t(level_key)
+
+        # 大卡片
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, {color}33, {color}11);
+                    border-left: 5px solid {color};
+                    padding: 1.5rem; border-radius: 10px; margin: 1rem 0;">
+            <h2 style="margin:0;">{t('aqi.current_city', city=city_display)}</h2>
+            <div style="font-size: 3rem; font-weight: bold; color: {color};">{city_info['aqi']}</div>
+            <div style="font-size: 1.2rem; color: {color}; font-weight: bold;">{level_text}</div>
+            <div style="margin-top: 0.5rem;">
+                📍 {t('aqi.station')}: {city_info['station']}
+                {"| 🏭 " + t('aqi.pollutant') + ": " + city_info['pollutant'] if city_info['pollutant'] else ""}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # PM2.5, PM10, O3 metrics
+        st.markdown('<div class="metric-row">', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            pm25 = city_info['pm25']
+            st.metric(t('aqi.pm25'), f"{pm25}" if pm25 is not None else "N/A")
+        with c2:
+            pm10 = city_info['pm10']
+            st.metric(t('aqi.pm10'), f"{pm10}" if pm10 is not None else "N/A")
+        with c3:
+            o3 = city_info['o3']
+            st.metric(t('aqi.o3'), f"{o3}" if o3 is not None else "N/A")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 12 城市 AQI 排行
+    st.markdown("---")
+    st.subheader(f"📊 {t('aqi.ranking_title')}")
+
+    all_cities = get_all_cities_aqi(all_data)
+    if all_cities:
+        rows = []
+        for info in all_cities:
+            lk, lc = get_aqi_level(info["aqi"])
+            display = WeatherAPI.get_city_display_name(info["city_en"])
+            rows.append({
+                t('aqi.ranking_city'): display,
+                t('aqi.ranking_aqi'): info["aqi"],
+                t('aqi.ranking_level'): t(lk),
+                t('aqi.ranking_station'): info["station"],
+            })
+
+        import pandas as pd
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+
+# ── 天氣地圖 ──
+
+def display_weather_map():
+    """顯示互動式天氣地圖"""
+    active_owm = _get_active_api_key("sidebar_owm_key", config.OPENWEATHER_API_KEY)
+    if not active_owm:
+        st.warning(f"⚠️ {t('map.no_owm_key')}")
+        return
+
+    st.subheader(f"🗺️ {t('map.title')}")
+
+    import folium
+    from streamlit_folium import st_folium
+
+    # 建立台灣中心地圖
+    m = folium.Map(location=[23.5, 121], zoom_start=7, tiles="OpenStreetMap")
+
+    # 收集各城市天氣資料
+    api = WeatherAPI(api_key=active_owm)
+
+    # AQI 資料（如有 key）
+    active_aqi = _get_active_api_key("sidebar_aqi_key", config.AQI_API_KEY)
+    aqi_data = None
+    if active_aqi:
+        aqi_data = fetch_aqi_data(active_aqi)
+
+    has_data = False
+    for city_en, coords in config.TAIWAN_CITIES_COORDS.items():
+        weather = api.get_current_weather(city_en)
+        if not weather:
+            continue
+        has_data = True
+
+        temp = weather["temperature"]
+        city_name = weather["city_tw"]
+        desc = weather["weather"]
+        humidity = weather["humidity"]
+        wind = weather["wind_speed"]
+
+        # 溫度分級顏色
+        if temp >= 35:
+            color = "#FF0000"
+        elif temp >= 30:
+            color = "#FF6B6B"
+        elif temp >= 25:
+            color = "#FFA500"
+        elif temp >= 20:
+            color = "#4ECDC4"
+        elif temp >= 15:
+            color = "#45B7D1"
+        else:
+            color = "#6C5CE7"
+
+        # popup 內容
+        popup_html = f"""
+        <div style="font-family: sans-serif; min-width: 150px;">
+            <h4 style="margin:0 0 5px 0;">{city_name}</h4>
+            <b>{t('map.popup_temp')}</b>: {temp}°C<br>
+            <b>{t('map.popup_weather')}</b>: {desc}<br>
+            <b>{t('map.popup_humidity')}</b>: {humidity}%<br>
+            <b>{t('map.popup_wind')}</b>: {wind} m/s
+        """
+
+        # 加入 AQI（如有）
+        if aqi_data:
+            city_aqi = get_city_aqi(aqi_data, city_en)
+            if city_aqi:
+                aqi_level_key, aqi_color = get_aqi_level(city_aqi["aqi"])
+                popup_html += f"""<br><b>{t('map.popup_aqi')}</b>:
+                    <span style="color:{aqi_color}; font-weight:bold;">{city_aqi['aqi']} ({t(aqi_level_key)})</span>"""
+
+        popup_html += "</div>"
+
+        folium.CircleMarker(
+            location=[coords["lat"], coords["lon"]],
+            radius=12,
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.7,
+            popup=folium.Popup(popup_html, max_width=250),
+            tooltip=f"{city_name} {temp}°C",
+        ).add_to(m)
+
+    if not has_data:
+        st.info(f"ℹ️ {t('map.no_data')}")
+        return
+
+    st_folium(m, width=None, height=500, returned_objects=[])
+
+
 # ── 主程式 ──
 
 def main():
@@ -714,11 +1123,15 @@ def main():
     display_weather_alerts()
 
     # 主要內容區域
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         f"🏠 {t('tab.current')}",
         f"📊 {t('tab.charts')}",
         f"📅 {t('tab.daily')}",
         f"🤖 {t('tab.ai')}",
+        f"✈️ {t('tab.travel')}",
+        f"🔄 {t('tab.compare')}",
+        f"🌬️ {t('tab.aqi')}",
+        f"🗺️ {t('tab.map')}",
     ])
 
     with tab1:
@@ -729,6 +1142,14 @@ def main():
         display_daily_forecast_table()
     with tab4:
         display_ai_analysis()
+    with tab5:
+        display_travel_recommendation()
+    with tab6:
+        display_city_comparison()
+    with tab7:
+        display_aqi()
+    with tab8:
+        display_weather_map()
 
     # 頁尾
     st.markdown("---")

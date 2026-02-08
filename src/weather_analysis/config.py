@@ -45,6 +45,9 @@ OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
 ONECALL_API_KEY = get_env_api_key("ONECALL_API_KEY", "")
 ONECALL_BASE_URL = "https://api.openweathermap.org/data/3.0"
 
+# 環境部 AQI API 設定（可選）
+AQI_API_KEY = get_env_api_key("AQI_API_KEY", "")
+
 # OpenAI API設定
 OPENAI_API_KEY = get_env_api_key("OPENAI_API_KEY", "your_openai_api_key_here")
 OPENAI_MODEL = "gpt-4o-mini"

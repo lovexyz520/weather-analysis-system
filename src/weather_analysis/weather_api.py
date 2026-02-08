@@ -190,3 +190,47 @@ def _cached_forecast(api_key, city, lang):
     except KeyError as e:
         st.error(t("api.error_parse", e=e))
         return None
+
+
+@st.cache_data(ttl=config.CACHE_EXPIRE_MINUTES * 60, show_spinner=False)
+def _cached_onecall_uvi(api_key, lat, lon):
+    """快取 One Call API UVI 資料（TTL 15 分鐘）"""
+    try:
+        url = f"{config.ONECALL_BASE_URL}/onecall"
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "appid": api_key,
+            "units": config.UNITS,
+            "exclude": "minutely,alerts",
+        }
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        current = data.get("current", {})
+        return {
+            "uvi": current.get("uvi", 0),
+            "dt": datetime.fromtimestamp(current.get("dt", 0)),
+        }
+    except Exception:
+        return None
+
+
+def get_uv_level(uvi: float) -> tuple[str, str]:
+    """
+    UV 指數分級。
+
+    Returns:
+        (i18n key, 顏色 hex)
+    """
+    if uvi <= 2:
+        return "uv.level_low", "#00e400"
+    elif uvi <= 5:
+        return "uv.level_moderate", "#ffff00"
+    elif uvi <= 7:
+        return "uv.level_high", "#ff7e00"
+    elif uvi <= 10:
+        return "uv.level_very_high", "#ff0000"
+    else:
+        return "uv.level_extreme", "#8f3f97"
