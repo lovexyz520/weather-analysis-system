@@ -372,10 +372,14 @@ def display_sidebar():
             ok = _validate_aqi_key(sidebar_aqi_input)
             st.session_state.aqi_validated = ok
             st.session_state.aqi_validated_key = sidebar_aqi_input
-        if st.session_state.aqi_validated:
+        v = st.session_state.aqi_validated
+        if v is True:
             st.sidebar.caption(f"✅ {t('sidebar.aqi_valid')}")
-        else:
+        elif v is False:
             st.sidebar.caption(f"❌ {t('sidebar.aqi_invalid')}")
+        else:
+            # None = 逾時或網路問題，無法驗證但 key 已輸入
+            st.sidebar.caption(f"⚠️ {t('sidebar.aqi_timeout')}")
     elif aqi_env:
         st.sidebar.caption(f"✅ {t('sidebar.aqi_env_loaded')}")
     else:
@@ -476,16 +480,37 @@ def _validate_onecall_key(api_key):
 
 
 def _validate_aqi_key(api_key):
-    """輕量驗證 AQI API Key（HTTP 200 即視為有效）"""
+    """
+    驗證 AQI API Key。
+
+    MOENV API 不論 key 正確與否都回 HTTP 200：
+    - 正確 key → JSON (list 或 dict)
+    - 錯誤 key → 純文字「該 API KEY 不存在或是已經到期。」
+
+    Returns:
+        True  = key 確認有效
+        False = key 確認無效
+        None  = 無法判斷（逾時 / 網路問題）
+    """
     try:
-        import requests
+        import requests as _req
         params = {"api_key": api_key, "limit": 1, "format": "JSON"}
-        resp = requests.get("https://data.moenv.gov.tw/api/v2/aqx_p_432", params=params, timeout=10)
-        # 只要 HTTP 200 就算 key 有效
-        # （Streamlit Cloud 在海外，MOENV API 可能回傳空資料但 key 本身是正確的）
-        return resp.status_code == 200
+        resp = _req.get(
+            "https://data.moenv.gov.tw/api/v2/aqx_p_432",
+            params=params, timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        try:
+            data = resp.json()
+            return True if isinstance(data, (list, dict)) else None
+        except ValueError:
+            # JSON 解析失敗 → 純文字錯誤訊息 → key 無效
+            return False
+    except _req.exceptions.Timeout:
+        return None
     except Exception:
-        return False
+        return None
 
 
 # ── 資料載入 ──
