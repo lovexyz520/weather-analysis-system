@@ -154,6 +154,10 @@ TRANSLATIONS = {
 
     # ── api errors (weather_api.py) ──
     "api.error_request": {"zh_tw": "API 請求錯誤: {e}", "en": "API request error: {e}"},
+    "api.error_request_safe": {
+        "zh_tw": "API 請求失敗，請確認網路連線與 API Key 是否正確",
+        "en": "API request failed, please check network connection and API Key",
+    },
     "api.error_parse": {"zh_tw": "資料解析錯誤: {e}", "en": "Data parsing error: {e}"},
     "api.key_valid": {"zh_tw": "API Key 有效", "en": "API Key is valid"},
     "api.key_invalid": {"zh_tw": "API Key 無效或尚未啟用", "en": "API Key is invalid or not activated"},
@@ -670,7 +674,10 @@ TRANSLATIONS = {
         "zh_tw": "請輸入環境部 AQI API Key 以查看空氣品質資料",
         "en": "Enter MOENV AQI API Key to view air quality data",
     },
-    "aqi.no_data": {"zh_tw": "無法取得 AQI 資料，請確認 API Key 是否正確", "en": "Failed to fetch AQI data, please check your API Key"},
+    "aqi.no_data": {
+        "zh_tw": "無法取得 AQI 資料。環境部 API 僅保證台灣境內存取，雲端部署（海外伺服器）可能無法取得資料。",
+        "en": "Unable to fetch AQI data. MOENV API is designed for access within Taiwan; cloud deployments on overseas servers may not receive data.",
+    },
     "aqi.ranking_title": {"zh_tw": "12 城市 AQI 排行", "en": "12 Cities AQI Ranking"},
     "aqi.ranking_city": {"zh_tw": "城市", "en": "City"},
     "aqi.ranking_aqi": {"zh_tw": "AQI", "en": "AQI"},
