@@ -704,6 +704,10 @@ TRANSLATIONS = {
         "zh_tw": "AQI API Key 無效，請確認金鑰是否正確",
         "en": "AQI API Key is invalid, please check your key",
     },
+    "sidebar.aqi_timeout": {
+        "zh_tw": "已輸入（環境部 API 連線逾時，雲端部署可能受海外限制）",
+        "en": "Entered (MOENV API timeout, may be restricted for overseas servers)",
+    },
 
     # ── map ──
     "map.title": {"zh_tw": "台灣天氣地圖", "en": "Taiwan Weather Map"},
